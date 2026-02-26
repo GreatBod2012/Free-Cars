@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Free Play</title>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
+
+<style>
+body{margin:0;overflow:hidden;background:#000;}
+</style>
+</head>
+<body>
+
+<script>
+
+// ---------------------
+// CORE SETUP
+// ---------------------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth/window.innerHeight,
+  0.1,
+  500
+);
+camera.position.set(0,3,8);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias:false,
+  powerPreference:"high-performance"
+});
+renderer.setSize(window.innerWidth,window.innerHeight);
+renderer.setPixelRatio(1);
+document.body.appendChild(renderer.domElement);
+
+// ---------------------
+// LIGHT (cheap)
+// ---------------------
+const light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(5,10,5);
+scene.add(light);
+
+// ---------------------
+// ROAD SYSTEM
+// ---------------------
+const ROAD_LENGTH = 40;
+const ROAD_COUNT  = 6;
+const SPEED = 0.4;
+
+const roadGeo = new THREE.PlaneGeometry(8,ROAD_LENGTH);
+const roadMat = new THREE.MeshBasicMaterial({color:0x222222});
+
+const roads = [];
+
+for(let i=0;i<ROAD_COUNT;i++){
+  const r = new THREE.Mesh(roadGeo,roadMat);
+  r.rotation.x = -Math.PI/2;
+  r.position.z = -i*ROAD_LENGTH;
+  scene.add(r);
+  roads.push(r);
+}
+
+// ---------------------
+// LOAD YOUR MODEL (once)
+// ---------------------
+const loader = new THREE.GLTFLoader();
+
+loader.load(
+  "scene.glb",
+  (gltf)=>{
+    const model = gltf.scene;
+    model.position.set(0,0,-25);
+
+    model.traverse(o=>{
+      if(o.isMesh){
+        o.frustumCulled = true;
+        o.castShadow = false;
+        o.receiveShadow = false;
+      }
+    });
+
+    scene.add(model);
+  },
+  undefined,
+  (err)=>{ console.error("GLB error:",err); }
+);
+
+// ---------------------
+// INFINITE RECYCLE
+// ---------------------
+function updateRoads(){
+  for(const r of roads){
+    r.position.z += SPEED;
+    if(r.position.z > ROAD_LENGTH){
+      r.position.z -= ROAD_LENGTH*ROAD_COUNT;
+    }
+  }
+}
+
+function updateCamera(){
+  camera.position.z -= SPEED;
+}
+
+// ---------------------
+// LOOP
+// ---------------------
+function animate(){
+  requestAnimationFrame(animate);
+  updateRoads();
+  updateCamera();
+  renderer.render(scene,camera);
+}
+animate();
+
+// ---------------------
+window.addEventListener("resize",()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+});
+
+</script>
+</body>
+</html>
