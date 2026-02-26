@@ -3,24 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Free Play</title>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
-
+<title>Infinite Road Stable</title>
 <style>
 body{margin:0;overflow:hidden;background:#000;}
 </style>
 </head>
 <body>
 
+<!-- Use stable non-module version -->
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
 <script>
 
-// ---------------------
-// CORE SETUP
-// ---------------------
+console.log("THREE version:", THREE.REVISION);
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+scene.background = new THREE.Color(0x2244ff);
 
 const camera = new THREE.PerspectiveCamera(
   75,
@@ -28,96 +27,92 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   500
 );
-camera.position.set(0,3,8);
+camera.position.set(0,3,10);
 
 const renderer = new THREE.WebGLRenderer({
   antialias:false,
   powerPreference:"high-performance"
 });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
 renderer.setSize(window.innerWidth,window.innerHeight);
-renderer.setPixelRatio(1);
 document.body.appendChild(renderer.domElement);
 
-// ---------------------
-// LIGHT (cheap)
-// ---------------------
-const light = new THREE.DirectionalLight(0xffffff,1);
-light.position.set(5,10,5);
-scene.add(light);
+// Lighting (PBR safe)
+scene.add(new THREE.AmbientLight(0xffffff,1));
+const dir = new THREE.DirectionalLight(0xffffff,1.5);
+dir.position.set(5,10,5);
+scene.add(dir);
 
-// ---------------------
-// ROAD SYSTEM
-// ---------------------
+// Road
 const ROAD_LENGTH = 40;
 const ROAD_COUNT  = 6;
 const SPEED = 0.4;
 
-const roadGeo = new THREE.PlaneGeometry(8,ROAD_LENGTH);
-const roadMat = new THREE.MeshBasicMaterial({color:0x222222});
-
 const roads = [];
+const geo = new THREE.PlaneGeometry(8,ROAD_LENGTH);
+const mat = new THREE.MeshStandardMaterial({color:0x222222});
 
 for(let i=0;i<ROAD_COUNT;i++){
-  const r = new THREE.Mesh(roadGeo,roadMat);
+  const r = new THREE.Mesh(geo,mat);
   r.rotation.x = -Math.PI/2;
   r.position.z = -i*ROAD_LENGTH;
   scene.add(r);
   roads.push(r);
 }
 
-// ---------------------
-// LOAD YOUR MODEL (once)
-// ---------------------
+// Load GLB
+let model;
 const loader = new THREE.GLTFLoader();
 
-loader.load(
-  "scene.glb",
-  (gltf)=>{
-    const model = gltf.scene;
-    model.position.set(0,0,-25);
+loader.load("scene.glb", function(gltf){
 
-    model.traverse(o=>{
-      if(o.isMesh){
-        o.frustumCulled = true;
-        o.castShadow = false;
-        o.receiveShadow = false;
-      }
-    });
+  model = gltf.scene;
 
-    scene.add(model);
-  },
-  undefined,
-  (err)=>{ console.error("GLB error:",err); }
-);
+  // Auto scale & center safely
+  const box = new THREE.Box3().setFromObject(model);
+  const size = new THREE.Vector3();
+  box.getSize(size);
 
-// ---------------------
-// INFINITE RECYCLE
-// ---------------------
-function updateRoads(){
-  for(const r of roads){
+  const maxDim = Math.max(size.x,size.y,size.z);
+  const scale = 5 / maxDim;
+  model.scale.setScalar(scale);
+
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  model.position.x = -center.x * scale;
+  model.position.y = -box.min.y * scale;
+  model.position.z = -40;
+
+  scene.add(model);
+
+  console.log("Model loaded OK");
+
+}, undefined, function(err){
+  console.error("GLB error:",err);
+});
+
+// Animate
+function animate(){
+  requestAnimationFrame(animate);
+
+  for(let r of roads){
     r.position.z += SPEED;
-    if(r.position.z > ROAD_LENGTH){
+    if(r.position.z > 20){
       r.position.z -= ROAD_LENGTH*ROAD_COUNT;
     }
   }
-}
 
-function updateCamera(){
-  camera.position.z -= SPEED;
-}
+  if(model){
+    model.position.z += SPEED;
+    if(model.position.z > 20){
+      model.position.z = -80;
+    }
+  }
 
-// ---------------------
-// LOOP
-// ---------------------
-function animate(){
-  requestAnimationFrame(animate);
-  updateRoads();
-  updateCamera();
   renderer.render(scene,camera);
 }
 animate();
 
-// ---------------------
 window.addEventListener("resize",()=>{
   camera.aspect = window.innerWidth/window.innerHeight;
   camera.updateProjectionMatrix();
